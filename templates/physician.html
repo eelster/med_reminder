@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Select or Add Patient</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('select_patient') }}">
+          <div class="mb-3">
+            <label class="form-label">Existing patient</label>
+            <select class="form-select" name="patient_id">
+              <option value="">-- choose patient --</option>
+              {% for p in patients %}
+                <option value="{{ p.id }}" {% if patient and p.id == patient.id %}selected{% endif %}>
+                  {{ p.id }} - {{ p.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="border-top pt-3 mb-3">
+            <div class="mb-2 fw-semibold">Or create a new patient</div>
+            <div class="mb-2">
+              <label class="form-label">Patient ID</label>
+              <input class="form-control" name="new_patient_id" placeholder="e.g., P-1001" />
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Patient Name</label>
+              <input class="form-control" name="new_patient_name" placeholder="Full name" />
+            </div>
+          </div>
+          <button class="btn btn-primary" type="submit">Open Patient Chart</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Medication Schedule</span>
+        {% if patient %}
+          <small class="text-muted">Patient: {{ patient.name }} ({{ patient.id }})</small>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if not patient %}
+          <p class="text-muted mb-0">Select or create a patient to manage their schedule.</p>
+        {% else %}
+          <form method="post" action="{{ url_for('create_schedule') }}" class="row g-3 mb-4">
+            <input type="hidden" name="patient_id" value="{{ patient.id }}" />
+            <div class="col-md-6">
+              <label class="form-label">Medication</label>
+              <select class="form-select" name="medication" required>
+                {% for med in medication_options %}
+                  <option value="{{ med }}">{{ med }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Dose</label>
+              <input class="form-control" name="dose" placeholder="1/2 pill, 1 pill, 25 mg, shot" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Frequency Value</label>
+              <input type="number" min="1" class="form-control" name="frequency_value" value="1" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Unit</label>
+              <select class="form-select" name="frequency_unit">
+                <option value="hours">Hours</option>
+                <option value="days" selected>Days</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Start Time</label>
+              <input type="datetime-local" class="form-control" name="start_time" />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Repeat Mode</label>
+              <select class="form-select" name="repeat_mode">
+                <option value="single">Single dose</option>
+                <option value="count">Set number of doses</option>
+                <option value="indefinite" selected>Continue indefinitely</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Repeat Count (if set number)</label>
+              <input type="number" min="1" class="form-control" name="repeat_count" placeholder="e.g., 10" />
+            </div>
+            <div class="col-12">
+              <button class="btn btn-success" type="submit">Add to Schedule</button>
+              <a class="btn btn-outline-secondary" href="{{ url_for('patient_view', patient_id=patient.id) }}" target="_blank">Open patient view</a>
+            </div>
+          </form>
+
+          <h6 class="fw-semibold">Existing schedule</h6>
+          {% if not patient.schedules %}
+            <p class="text-muted">No medications added yet.</p>
+          {% else %}
+            <ul class="list-group">
+              {% for sched in patient.schedules %}
+                <li class="list-group-item">
+                  <div class="fw-semibold">{{ sched.medication }} — {{ sched.dose }}</div>
+                  <div class="text-muted small">
+                    Every {{ sched.frequency_value }} {{ sched.frequency_unit }}
+                    · Repeat: {{ sched.repeat_mode }}
+                    {% if sched.repeat_mode == 'count' and sched.repeat_count %}
+                      ({{ sched.repeat_count }} times)
+                    {% endif %}
+                    · Starts: {{ sched.start_time | replace('T', ' ') }}
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
