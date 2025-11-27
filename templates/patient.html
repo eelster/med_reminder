@@ -1,85 +1,163 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card">
-  <div class="card-header">
-    Patient View
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <strong>Patient View</strong>
+      {% if patient %}
+        <span class="text-muted">— {{ patient.name }}</span>
+      {% endif %}
+    </div>
+    {% if patient %}
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('physician', patient_id=patient.id) }}">Physician View</a>
+    {% endif %}
   </div>
   <div class="card-body">
     {% if not patient %}
-      <p class="text-muted">No patient found. Please confirm the link from your physician.</p>
-    {% else %}
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h5 class="mb-0">{{ patient.name }}</h5>
-          <div class="text-muted">ID: {{ patient.id }}</div>
-        </div>
-        <a class="btn btn-outline-primary" href="{{ url_for('physician', patient_id=patient.id) }}">Back to physician view</a>
+      <div class="text-center py-5">
+        <p class="text-muted mb-0">No patient found. Please confirm the link from your physician.</p>
       </div>
+    {% else %}
 
-      <h6 class="fw-semibold">Upcoming reminders</h6>
-      {% if not occurrences %}
-        <p class="text-muted">No upcoming medications scheduled.</p>
-      {% else %}
-        <div class="list-group">
-          {% for occurrence in occurrences %}
-            <div class="list-group-item">
-              <div class="d-flex justify-content-between">
-                <div>
-                  <div class="fw-semibold">{{ occurrence.schedule.medication }} — {{ occurrence.schedule.dose }}</div>
-                  <div class="text-muted small">
-                    {{ occurrence.time.strftime('%b %d, %Y %I:%M %p') }}
-                    · Every {{ occurrence.schedule.frequency_value }} {{ occurrence.schedule.frequency_unit }}
-                    · Repeat {{ occurrence.schedule.repeat_mode }}
+      <!-- Today's Medications -->
+      <div class="mb-4">
+        <h5 class="mb-3">
+          <span class="badge bg-primary me-2">Today</span>
+          {{ now.strftime('%A, %B %d, %Y') }}
+        </h5>
+        {% if todays_meds %}
+          <div class="row g-3">
+            {% for med in todays_meds %}
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="card border-primary h-100">
+                  <div class="card-body">
+                    <div class="display-6 text-primary mb-2">{{ med.time.strftime('%I:%M %p') }}</div>
+                    <div class="fw-bold">{{ med.schedule.medication }}</div>
+                    <div class="text-muted">{{ med.schedule.dose }}</div>
                   </div>
                 </div>
               </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-
-      <hr class="my-4">
-      <div class="d-flex align-items-center mb-2">
-        <h6 class="fw-semibold mb-0">Calendar (next 4 weeks)</h6>
-        <span class="badge bg-primary ms-2">Next 2 days highlighted</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="alert alert-info mb-0">
+            <i class="bi bi-info-circle me-2"></i>No medications scheduled for today.
+          </div>
+        {% endif %}
       </div>
-      {% if not calendar_days %}
-        <p class="text-muted">No medications to display on the calendar.</p>
-      {% else %}
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
-          {% for day in calendar_days %}
-            <div class="col">
-              <div class="card h-100 {% if day.is_highlight %}border-primary shadow-sm{% endif %}">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                      <div class="fw-semibold">{{ day.date.strftime('%a, %b %d') }}</div>
-                      {% if day.is_today %}
-                        <span class="badge bg-secondary mt-1">Today</span>
+
+      <hr>
+
+      <!-- Next 7 Days -->
+      <div class="mb-4">
+        <h5 class="mb-3">Coming Up This Week</h5>
+        {% if next_week_meds %}
+          <div class="list-group">
+            {% for day in next_week_meds %}
+              <div class="list-group-item">
+                <div class="fw-semibold mb-2">{{ day.date.strftime('%A, %B %d') }}</div>
+                <div class="row g-2">
+                  {% for med in day.meds %}
+                    <div class="col-12 col-sm-6 col-lg-4">
+                      <div class="small">
+                        <span class="badge bg-secondary">{{ med.time.strftime('%I:%M %p') }}</span>
+                        <span class="ms-2">{{ med.schedule.medication }} — {{ med.schedule.dose }}</span>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No medications scheduled for the next 7 days.</p>
+        {% endif %}
+      </div>
+
+      <hr>
+
+      <!-- Calendar View -->
+      <div class="mb-4">
+        <h5 class="mb-3">4-Week Calendar</h5>
+        <div class="table-responsive">
+          <table class="table table-bordered text-center">
+            <thead class="table-light">
+              <tr>
+                <th>Mon</th>
+                <th>Tue</th>
+                <th>Wed</th>
+                <th>Thu</th>
+                <th>Fri</th>
+                <th>Sat</th>
+                <th>Sun</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for week in calendar_weeks %}
+                <tr>
+                  {% for day in week %}
+                    <td class="{% if day.is_today %}table-primary{% elif day.is_past %}table-light text-muted{% endif %}" style="vertical-align: top; min-width: 100px;">
+                      <div class="fw-semibold mb-1">
+                        {{ day.date.strftime('%d') }}
+                        {% if day.is_today %}
+                          <span class="badge bg-primary" style="font-size: 0.6rem;">Today</span>
+                        {% endif %}
+                      </div>
+                      {% if day.meds %}
+                        <div class="small text-start">
+                          {% for med in day.meds %}
+                            <div class="mb-1" style="font-size: 0.75rem;">
+                              <div class="text-primary">{{ med.time.strftime('%I:%M %p') }}</div>
+                              <div class="text-truncate" title="{{ med.schedule.medication }}">{{ med.schedule.medication }}</div>
+                            </div>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <hr>
+
+      <!-- Medication Schedules -->
+      <div class="mb-3">
+        <h5 class="mb-3">My Medication Schedules</h5>
+        {% if schedules %}
+          <div class="list-group">
+            {% for schedule in schedules %}
+              <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div class="flex-grow-1">
+                    <div class="fw-bold">{{ schedule.medication }}</div>
+                    <div class="text-muted">{{ schedule.dose }}</div>
+                    <div class="small mt-1">
+                      <span class="badge bg-secondary">Every {{ schedule.frequency_value }} {{ schedule.frequency_unit }}</span>
+                      {% if schedule.repeat_mode == 'single' %}
+                        <span class="badge bg-info">One time</span>
+                      {% elif schedule.repeat_mode == 'count' %}
+                        <span class="badge bg-info">{{ schedule.repeat_count }} times</span>
+                      {% elif schedule.repeat_mode == 'indefinite' %}
+                        <span class="badge bg-info">Ongoing</span>
+                      {% endif %}
+                      {% if schedule.start_time %}
+                        <span class="text-muted ms-2">Started: {{ schedule.start_time[:10] }}</span>
                       {% endif %}
                     </div>
-                    {% if day.is_highlight %}
-                      <span class="badge bg-primary">Next 2 days</span>
-                    {% endif %}
                   </div>
-                  {% if day['items'] %}
-                    <ul class="list-unstyled small mt-3 mb-0">
-                      {% for item in day['items'] %}
-                        <li class="mb-2">
-                          <div class="fw-semibold">{{ item.schedule.medication }} — {{ item.schedule.dose }}</div>
-                          <div class="text-muted">{{ item.time.strftime('%I:%M %p') }}</div>
-                        </li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    <div class="text-muted small mt-3">No medications</div>
-                  {% endif %}
                 </div>
               </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No medication schedules found.</p>
+        {% endif %}
+      </div>
+
     {% endif %}
   </div>
 </div>

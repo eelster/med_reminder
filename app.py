@@ -156,7 +156,12 @@ def patient_view(patient_id: str):
     patient = find_patient(patient_id)
     if not patient:
         return render_template(
-            "patient.html", patient=None, occurrences=[], calendar_days=[]
+            "patient.html",
+            patient=None,
+            todays_meds=[],
+            next_week_meds=[],
+            calendar_weeks=[],
+            schedules=[]
         )
 
     if "schedules" not in patient:
@@ -174,6 +179,7 @@ def patient_view(patient_id: str):
 
     occurrences.sort(key=lambda item: item["time"])
 
+    # Group occurrences by day
     occurrences_by_day: Dict[datetime.date, List[Dict]] = {}
     for occurrence in occurrences:
         occ_date = occurrence["time"].date()
@@ -181,26 +187,56 @@ def patient_view(patient_id: str):
             continue
         occurrences_by_day.setdefault(occ_date, []).append(occurrence)
 
-    calendar_days = []
-    for day_offset in range(28):
+    # Today's medications
+    todays_meds = sorted(
+        occurrences_by_day.get(today, []),
+        key=lambda item: item["time"]
+    )
+
+    # Next 7 days medications
+    next_week_meds = []
+    for day_offset in range(1, 8):
         day_date = today + timedelta(days=day_offset)
-        day_occurrences = sorted(
-            occurrences_by_day.get(day_date, []), key=lambda item: item["time"]
+        day_meds = sorted(
+            occurrences_by_day.get(day_date, []),
+            key=lambda item: item["time"]
         )
-        calendar_days.append(
-            {
+        if day_meds:
+            next_week_meds.append({
                 "date": day_date,
-                "items": day_occurrences,
+                "meds": day_meds
+            })
+
+    # Build calendar weeks (4 weeks, aligned to start of week)
+    # Find the Monday of the current week
+    days_since_monday = today.weekday()  # 0=Monday, 6=Sunday
+    week_start = today - timedelta(days=days_since_monday)
+
+    calendar_weeks = []
+    for week_num in range(4):
+        week = []
+        for day_num in range(7):  # Monday to Sunday
+            day_date = week_start + timedelta(days=week_num * 7 + day_num)
+            day_meds = sorted(
+                occurrences_by_day.get(day_date, []),
+                key=lambda item: item["time"]
+            )
+            week.append({
+                "date": day_date,
+                "meds": day_meds,
                 "is_today": day_date == today,
-                "is_highlight": day_date <= today + timedelta(days=1),
-            }
-        )
+                "is_past": day_date < today,
+                "is_future": day_date > end_date
+            })
+        calendar_weeks.append(week)
 
     return render_template(
         "patient.html",
         patient=patient,
-        occurrences=occurrences,
-        calendar_days=calendar_days,
+        todays_meds=todays_meds,
+        next_week_meds=next_week_meds,
+        calendar_weeks=calendar_weeks,
+        schedules=patient.get("schedules", [])
     )
 
 
