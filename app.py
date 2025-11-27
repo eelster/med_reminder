@@ -31,6 +31,8 @@ def home():
 def physician():
     patient_id = request.args.get("patient_id")
     patient = find_patient(patient_id) if patient_id else None
+    if patient is not None and "schedules" not in patient:
+        patient["schedules"] = []
     patients = get_patients()
     return render_template(
         "physician.html",
@@ -101,7 +103,14 @@ def expand_schedule(
     end_time: Optional[datetime] = None,
 ) -> List[Dict]:
     now = now or datetime.now()
-    start = datetime.fromisoformat(schedule.get("start_time"))
+    try:
+        start_raw = schedule.get("start_time")
+        start = datetime.fromisoformat(start_raw) if start_raw else None
+    except (TypeError, ValueError):
+        return []
+
+    if start is None:
+        return []
     frequency_value = max(1, int(schedule.get("frequency_value", 1)))
     frequency_unit = schedule.get("frequency_unit", "days")
     repeat_mode = schedule.get("repeat_mode", "single")
@@ -149,6 +158,9 @@ def patient_view(patient_id: str):
         return render_template(
             "patient.html", patient=None, occurrences=[], calendar_days=[]
         )
+
+    if "schedules" not in patient:
+        patient["schedules"] = []
 
     occurrences: List[Dict] = []
     now = datetime.now()
