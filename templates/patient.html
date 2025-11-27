@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    Patient View
+  </div>
+  <div class="card-body">
+    {% if not patient %}
+      <p class="text-muted">No patient found. Please confirm the link from your physician.</p>
+    {% else %}
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h5 class="mb-0">{{ patient.name }}</h5>
+          <div class="text-muted">ID: {{ patient.id }}</div>
+        </div>
+        <a class="btn btn-outline-primary" href="{{ url_for('physician', patient_id=patient.id) }}">Back to physician view</a>
+      </div>
+
+      <h6 class="fw-semibold">Upcoming reminders</h6>
+      {% if not occurrences %}
+        <p class="text-muted">No upcoming medications scheduled.</p>
+      {% else %}
+        <div class="list-group">
+          {% for occurrence in occurrences %}
+            <div class="list-group-item">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <div class="fw-semibold">{{ occurrence.schedule.medication }} — {{ occurrence.schedule.dose }}</div>
+                  <div class="text-muted small">
+                    {{ occurrence.time.strftime('%b %d, %Y %I:%M %p') }}
+                    · Every {{ occurrence.schedule.frequency_value }} {{ occurrence.schedule.frequency_unit }}
+                    · Repeat {{ occurrence.schedule.repeat_mode }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <hr class="my-4">
+      <div class="d-flex align-items-center mb-2">
+        <h6 class="fw-semibold mb-0">Calendar (next 4 weeks)</h6>
+        <span class="badge bg-primary ms-2">Next 2 days highlighted</span>
+      </div>
+      {% if not calendar_days %}
+        <p class="text-muted">No medications to display on the calendar.</p>
+      {% else %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+          {% for day in calendar_days %}
+            <div class="col">
+              <div class="card h-100 {% if day.is_highlight %}border-primary shadow-sm{% endif %}">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      <div class="fw-semibold">{{ day.date.strftime('%a, %b %d') }}</div>
+                      {% if day.is_today %}
+                        <span class="badge bg-secondary mt-1">Today</span>
+                      {% endif %}
+                    </div>
+                    {% if day.is_highlight %}
+                      <span class="badge bg-primary">Next 2 days</span>
+                    {% endif %}
+                  </div>
+                  {% if day.items %}
+                    <ul class="list-unstyled small mt-3 mb-0">
+                      {% for item in day.items %}
+                        <li class="mb-2">
+                          <div class="fw-semibold">{{ item.schedule.medication }} — {{ item.schedule.dose }}</div>
+                          <div class="text-muted">{{ item.time.strftime('%I:%M %p') }}</div>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <div class="text-muted small mt-3">No medications</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
