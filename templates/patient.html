@@ -62,9 +62,9 @@
                       <span class="badge bg-primary">Next 2 days</span>
                     {% endif %}
                   </div>
-                  {% if day.items %}
+                  {% if day['items'] %}
                     <ul class="list-unstyled small mt-3 mb-0">
-                      {% for item in day.items %}
+                      {% for item in day['items'] %}
                         <li class="mb-2">
                           <div class="fw-semibold">{{ item.schedule.medication }} — {{ item.schedule.dose }}</div>
                           <div class="text-muted">{{ item.time.strftime('%I:%M %p') }}</div>
