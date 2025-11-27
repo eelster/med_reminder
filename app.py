@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import uuid
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from flask import Flask, redirect, render_template, request, url_for
 
@@ -94,7 +94,12 @@ def _schedule_delta(frequency_value: int, frequency_unit: str) -> timedelta:
     return timedelta(days=frequency_value)
 
 
-def expand_schedule(schedule: Dict, limit: int = 10, now: datetime | None = None) -> List[Dict]:
+def expand_schedule(
+    schedule: Dict,
+    limit: int = 10,
+    now: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+) -> List[Dict]:
     now = now or datetime.now()
     start = datetime.fromisoformat(schedule.get("start_time"))
     frequency_value = max(1, int(schedule.get("frequency_value", 1)))
@@ -107,7 +112,7 @@ def expand_schedule(schedule: Dict, limit: int = 10, now: datetime | None = None
     occurrences: List[Dict] = []
 
     if repeat_mode == "single":
-        if start >= now:
+        if start >= now and (end_time is None or start <= end_time):
             occurrences.append({"time": start, "schedule": schedule})
         return occurrences
 
@@ -115,18 +120,24 @@ def expand_schedule(schedule: Dict, limit: int = 10, now: datetime | None = None
     count = 0
     max_occurrences = repeat_count if repeat_mode == "count" and repeat_count else limit
 
-    while len(occurrences) < max_occurrences:
+    while True:
         if repeat_mode == "count" and repeat_count is not None and count >= repeat_count:
             break
 
-        if current_time >= now:
+        if end_time and current_time > end_time:
+            break
+
+        if repeat_mode == "count" and not end_time and len(occurrences) >= max_occurrences:
+            break
+
+        if repeat_mode == "indefinite" and not end_time and len(occurrences) >= limit:
+            break
+
+        if current_time >= now and (end_time is None or current_time <= end_time):
             occurrences.append({"time": current_time, "schedule": schedule})
 
         count += 1
         current_time += delta
-
-        if repeat_mode == "indefinite" and len(occurrences) >= limit:
-            break
 
     return occurrences
 
@@ -135,14 +146,50 @@ def expand_schedule(schedule: Dict, limit: int = 10, now: datetime | None = None
 def patient_view(patient_id: str):
     patient = find_patient(patient_id)
     if not patient:
-        return render_template("patient.html", patient=None, occurrences=[])
+        return render_template(
+            "patient.html", patient=None, occurrences=[], calendar_days=[]
+        )
 
     occurrences: List[Dict] = []
+    now = datetime.now()
+    calendar_end = now + timedelta(days=28)
+    today = now.date()
+    end_date = today + timedelta(days=27)
     for schedule in patient.get("schedules", []):
-        occurrences.extend(expand_schedule(schedule))
+        occurrences.extend(
+            expand_schedule(schedule, now=now, end_time=calendar_end, limit=200)
+        )
 
     occurrences.sort(key=lambda item: item["time"])
-    return render_template("patient.html", patient=patient, occurrences=occurrences)
+
+    occurrences_by_day: Dict[datetime.date, List[Dict]] = {}
+    for occurrence in occurrences:
+        occ_date = occurrence["time"].date()
+        if occ_date > end_date:
+            continue
+        occurrences_by_day.setdefault(occ_date, []).append(occurrence)
+
+    calendar_days = []
+    for day_offset in range(28):
+        day_date = today + timedelta(days=day_offset)
+        day_occurrences = sorted(
+            occurrences_by_day.get(day_date, []), key=lambda item: item["time"]
+        )
+        calendar_days.append(
+            {
+                "date": day_date,
+                "items": day_occurrences,
+                "is_today": day_date == today,
+                "is_highlight": day_date <= today + timedelta(days=1),
+            }
+        )
+
+    return render_template(
+        "patient.html",
+        patient=patient,
+        occurrences=occurrences,
+        calendar_days=calendar_days,
+    )
 
 
 @app.context_processor
