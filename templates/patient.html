@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    Patient View
+  </div>
+  <div class="card-body">
+    {% if not patient %}
+      <p class="text-muted">No patient found. Please confirm the link from your physician.</p>
+    {% else %}
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h5 class="mb-0">{{ patient.name }}</h5>
+          <div class="text-muted">ID: {{ patient.id }}</div>
+        </div>
+        <a class="btn btn-outline-primary" href="{{ url_for('physician', patient_id=patient.id) }}">Back to physician view</a>
+      </div>
+
+      <h6 class="fw-semibold">Upcoming reminders</h6>
+      {% if not occurrences %}
+        <p class="text-muted">No upcoming medications scheduled.</p>
+      {% else %}
+        <div class="list-group">
+          {% for occurrence in occurrences %}
+            <div class="list-group-item">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <div class="fw-semibold">{{ occurrence.schedule.medication }} — {{ occurrence.schedule.dose }}</div>
+                  <div class="text-muted small">
+                    {{ occurrence.time.strftime('%b %d, %Y %I:%M %p') }}
+                    · Every {{ occurrence.schedule.frequency_value }} {{ occurrence.schedule.frequency_unit }}
+                    · Repeat {{ occurrence.schedule.repeat_mode }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
