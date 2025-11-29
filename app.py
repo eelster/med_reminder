@@ -1,10 +1,18 @@
 from datetime import datetime, timedelta
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
+import pywhatkit
 
 from flask import Flask, redirect, render_template, request, url_for
 
-from data_store import add_schedule, find_patient, get_patients, load_data, upsert_patient
+from data_store import (
+    add_schedule,
+    find_patient,
+    get_patients,
+    mark_reminder_sent,
+    upsert_patient,
+)
 
 app = Flask(__name__)
 
@@ -34,11 +42,15 @@ def physician():
     if patient is not None and "schedules" not in patient:
         patient["schedules"] = []
     patients = get_patients()
+    reminder_status = request.args.get("reminder_status")
+    reminder_level = request.args.get("reminder_level") or "info"
     return render_template(
         "physician.html",
         patients=patients,
         patient=patient,
         medication_options=MEDICATION_OPTIONS,
+        reminder_status=reminder_status,
+        reminder_level=reminder_level,
     )
 
 
@@ -46,11 +58,16 @@ def physician():
 def select_patient():
     patient_id = request.form.get("patient_id") or request.form.get("new_patient_id")
     patient_name = request.form.get("patient_name") or request.form.get("new_patient_name")
+    patient_phone = request.form.get("patient_phone") or ""
 
     if not patient_id:
         return redirect(url_for("physician"))
 
-    upsert_patient(patient_id=patient_id.strip(), name=(patient_name or "").strip())
+    upsert_patient(
+        patient_id=patient_id.strip(),
+        name=(patient_name or "").strip(),
+        phone_number=patient_phone.strip(),
+    )
     return redirect(url_for("physician", patient_id=patient_id))
 
 
@@ -88,6 +105,117 @@ def create_schedule():
 
     add_schedule(patient_id, schedule)
     return redirect(url_for("physician", patient_id=patient_id))
+
+
+def _last_reminder_sent_at(schedule: Dict) -> Optional[datetime]:
+    raw = schedule.get("last_reminder_sent_at")
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _send_whatsapp_message(phone_number: str, message: str) -> Tuple[bool, Optional[str]]:
+    try:
+        pywhatkit.sendwhatmsg_instantly(
+            phone_no=phone_number,
+            message=message,
+            wait_time=10,
+            tab_close=True,
+        )
+    except Exception as exc:  # noqa: BLE001 - show failure to user
+        return False, str(exc)
+
+    return True, None
+
+
+@app.route("/physician/send_reminders", methods=["POST"])
+def send_reminders():
+    patient_id = request.form.get("patient_id")
+    if not patient_id:
+        return redirect(url_for("physician"))
+
+    window_minutes = int(request.form.get("window_minutes") or 15)
+    patient = find_patient(patient_id)
+    if not patient:
+        return redirect(url_for("physician"))
+
+    phone_number = (patient.get("phone_number") or "").strip()
+    if not phone_number:
+        return redirect(
+            url_for(
+                "physician",
+                patient_id=patient_id,
+                reminder_status="No WhatsApp number on file for this patient.",
+                reminder_level="warning",
+            )
+        )
+
+    now = datetime.now()
+    end_time = now + timedelta(minutes=max(1, window_minutes))
+    occurrences: List[Dict] = []
+    for schedule in patient.get("schedules", []):
+        occurrences.extend(
+            expand_schedule(schedule, now=now, end_time=end_time, limit=200)
+        )
+
+    reminders_to_send: List[Dict] = []
+    for occ in occurrences:
+        schedule = occ.get("schedule", {})
+        occurrence_time = occ.get("time")
+        if not occurrence_time:
+            continue
+
+        last_sent = _last_reminder_sent_at(schedule)
+        if last_sent and last_sent >= occurrence_time:
+            continue
+        reminders_to_send.append(occ)
+
+    sent_count = 0
+    errors: List[str] = []
+    for occ in reminders_to_send:
+        schedule = occ.get("schedule", {})
+        occurrence_time = occ.get("time")
+        if not occurrence_time:
+            continue
+
+        reminder_message = (
+            f"Hi {patient.get('name') or 'there'}, this is your reminder to take "
+            f"{schedule.get('medication', 'your medication')} ({schedule.get('dose', '')}) "
+            f"at {occurrence_time.strftime('%I:%M %p on %B %d, %Y')}."
+        )
+
+        success, error_message = _send_whatsapp_message(phone_number, reminder_message)
+        if success:
+            sent_count += 1
+            mark_reminder_sent(
+                patient_id=patient_id,
+                schedule_id=schedule.get("id", ""),
+                occurrence_time=occurrence_time.isoformat(),
+            )
+        elif error_message:
+            errors.append(error_message)
+
+    if errors:
+        status = "Some reminders failed: " + "; ".join(errors)
+        level = "danger"
+    elif sent_count == 0:
+        status = "No reminders to send in the selected window."
+        level = "info"
+    else:
+        status = f"Sent {sent_count} WhatsApp reminder(s)."
+        level = "success"
+
+    return redirect(
+        url_for(
+            "physician",
+            patient_id=patient_id,
+            reminder_status=status,
+            reminder_level=level,
+        )
+    )
 
 
 def _schedule_delta(frequency_value: int, frequency_unit: str) -> timedelta:

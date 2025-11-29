@@ -28,6 +28,17 @@
               <input class="form-control" name="new_patient_name" placeholder="Full name" />
             </div>
           </div>
+          <div class="border-top pt-3 mb-3">
+            <div class="mb-2 fw-semibold">Reminder contact</div>
+            <label class="form-label">WhatsApp number (include country code)</label>
+            <input
+              class="form-control"
+              name="patient_phone"
+              value="{{ patient.phone_number if patient and patient.phone_number else '' }}"
+              placeholder="e.g., +15551231234"
+            />
+            <div class="form-text">Used to send medication reminders with pywhatkit.</div>
+          </div>
           <button class="btn btn-primary" type="submit">Open Patient Chart</button>
         </form>
       </div>
@@ -46,6 +57,9 @@
         {% if not patient %}
           <p class="text-muted mb-0">Select or create a patient to manage their schedule.</p>
         {% else %}
+          {% if reminder_status %}
+            <div class="alert alert-{{ reminder_level }}">{{ reminder_status }}</div>
+          {% endif %}
           <form method="post" action="{{ url_for('create_schedule') }}" class="row g-3 mb-4">
             <input type="hidden" name="patient_id" value="{{ patient.id }}" />
             <div class="col-md-6">
@@ -92,6 +106,20 @@
               <a class="btn btn-outline-secondary" href="{{ url_for('patient_view', patient_id=patient.id) }}" target="_blank">Open patient view</a>
             </div>
           </form>
+          <div class="border rounded p-3 mb-4">
+            <form method="post" action="{{ url_for('send_reminders') }}" class="row g-2 align-items-end">
+              <input type="hidden" name="patient_id" value="{{ patient.id }}" />
+              <div class="col-md-6">
+                <label class="form-label">Reminder window (minutes)</label>
+                <input type="number" min="1" class="form-control" name="window_minutes" value="15" />
+                <div class="form-text">Sends reminders for doses scheduled within the next N minutes.</div>
+              </div>
+              <div class="col-md-6">
+                <button class="btn btn-outline-primary" type="submit">Send WhatsApp reminders</button>
+                <div class="form-text">Uses pywhatkit to notify the patient's WhatsApp number.</div>
+              </div>
+            </form>
+          </div>
 
           <h6 class="fw-semibold">Existing schedule</h6>
           {% if not patient.schedules %}
